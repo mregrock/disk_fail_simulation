@@ -2,260 +2,289 @@
 #include <map>
 #include <iomanip>
 
-using namespace arctic;  //NOLINT
+using namespace arctic;
 
-std::shared_ptr<GuiTheme> g_theme;
-std::shared_ptr<Panel> g_gui;
-Font g_font;
+std::shared_ptr<GuiTheme> GTheme;
+std::shared_ptr<Panel> GGui;
+Font GFont;
 
-// GUI элементы
-std::shared_ptr<Text> g_text_disks_per_dc;
-std::shared_ptr<Text> g_text_disk_size;
-std::shared_ptr<Text> g_text_failure_rate;
-std::shared_ptr<Text> g_text_data_loss;
-std::shared_ptr<Text> g_text_stats;
+std::shared_ptr<Text> GTextDisksPerDc;
+std::shared_ptr<Text> GTextDiskSize;
+std::shared_ptr<Text> GTextFailureRate;
+std::shared_ptr<Text> GTextDataLoss;
+std::shared_ptr<Text> GTextStats;
+std::shared_ptr<Text> GTextSpareDisks;
+std::shared_ptr<Text> GTextWriteSpeed;
 
-std::shared_ptr<Scrollbar> g_scroll_disks_per_dc;
-std::shared_ptr<Scrollbar> g_scroll_disk_size;
-std::shared_ptr<Scrollbar> g_scroll_failure_rate;
+std::shared_ptr<Scrollbar> GScrollDisksPerDc;
+std::shared_ptr<Scrollbar> GScrollDiskSize;
+std::shared_ptr<Scrollbar> GScrollFailureRate;
+std::shared_ptr<Scrollbar> GScrollSpareDisks;
+std::shared_ptr<Scrollbar> GScrollWriteSpeed;
 
-// Параметры симуляции
-Si32 g_disks_per_dc = 100;    // Дисков в каждом DC
-Si32 g_disk_size = 4096;      // GB
-Si32 g_failure_rate = 3;      // failures/day
-Ui64 g_sims = 0;
-double g_data_loss_prob = 0.0;
+Ui32 GDisksPerDc = 100;
+Ui32 GDiskSize = 4096;
+Ui32 GFailureRate = 3;
+Ui32 GSpareDisksPerDc = 10;
+Ui32 GWriteSpeed = 100;
+Ui64 GSims = 0;
 
-bool g_do_restart = true;  // Добавить в глобальные переменные
+double GDataLossProb = 0.0;
+bool GDoRestart = true;
 
-const Si32 GRAPH_WIDTH = 1200;  // Увеличим с 800 до 1200
-const Si32 GRAPH_HEIGHT = 500;
-const Si32 SCREEN_WIDTH = 1920;
-const Si32 SCREEN_HEIGHT = 1080;
-const Si32 LEFT_MARGIN = (SCREEN_WIDTH - GRAPH_WIDTH) / 2;
-const Si32 TOP_MARGIN = (SCREEN_HEIGHT - GRAPH_HEIGHT) / 2;
+const Ui32 kGraphWidth = 1200;
+const Ui32 kGraphHeight = 500;
+const Ui32 kScreenWidth = 1920;
+const Ui32 kScreenHeight = 1080;
+const Ui32 kLeftMargin = (kScreenWidth - kGraphWidth) / 2;
+
+const Ui32 kTopMargin = (kScreenHeight - kGraphHeight) / 2;
+const Ui32 kControlsYOffset = 0;
 
 struct Disk {
-    enum State { ACTIVE, INACTIVE, FAULTY };
-    State state = ACTIVE;
-    double inactive_time = 0;  // Когда диск перешел в INACTIVE
-    double rebuild_time = 0;   // Сколько времени нужно на восстановление
-    Si32 dc_id = 0;           // ID датацентра
-    Si32 data_id = -1;        // ID данных, хранящихся на диске
+    enum DiskState { Active, Inactive, Faulty };
+    DiskState State = Active;
+    double InactiveTime = 0;
+    double RebuildTime = 0;
+    Ui32 DcId = 0;
+    Si32 GroupId = -1;
 };
 
 struct DataCenter {
-    std::vector<Disk> disks;
-    std::vector<Si32> spare_disks;
+    std::vector<Disk> Disks;
+    std::vector<Ui32> SpareDisks;
+    std::unordered_set<Ui32> InactiveDisks;
+    std::unordered_set<Ui32> FaultyDisks;
 };
 
 struct Sim {
-    std::vector<DataCenter> dcs;  // 3 датацентра
-    double current_time = 0;      // Текущее время в часах
-    Si32 lost_data = 0;          // Количество потерянных данных
-    
+    std::vector<DataCenter> Dcs;
+    double CurrentTime = 0;
+    Ui32 LostData = 0;
+
     void Reset() {
-        dcs.resize(3); // 3 датацентра
-        current_time = 0;
-        lost_data = 0;
+        Dcs.resize(3);
+        CurrentTime = 0;
+        LostData = 0;
         
-        // Инициализация дисков в каждом DC
         for (Si32 dc = 0; dc < 3; ++dc) {
-            dcs[dc].disks.resize(g_disks_per_dc);
-            dcs[dc].spare_disks.resize(g_disks_per_dc / 10); // 10% запасных
+            Dcs[dc].Disks.resize(GDisksPerDc + GSpareDisksPerDc);
+            Dcs[dc].SpareDisks.clear();
             
-            for (auto& disk : dcs[dc].disks) {
-                disk.state = Disk::ACTIVE;
-                disk.dc_id = dc;
+            for (Si32 i = 0; i < GDisksPerDc; ++i) {
+                Dcs[dc].Disks[i].State = Disk::Active;
+                Dcs[dc].Disks[i].DcId = dc;
+            }
+            
+            for (Si32 i = GDisksPerDc; i < GDisksPerDc + GSpareDisksPerDc; ++i) {
+                Dcs[dc].SpareDisks.push_back(i);
+                Dcs[dc].Disks[i].State = Disk::Inactive;
+                Dcs[dc].Disks[i].DcId = dc;
             }
         }
         
-        // Распределение данных по дискам (3 копии)
-        Si32 data_id = 0;
-        for (Si32 i = 0; i < g_disks_per_dc; ++i) {
-            Si32 disk1 = i;
-            Si32 disk2 = i;
-            Si32 disk3 = i;
+        Si32 groupId = 0;
+        std::vector<bool> usedDisks[3];
+        for (Si32 dc = 0; dc < 3; ++dc) {
+            usedDisks[dc].resize(GDisksPerDc, false);
+        }
+        
+        while (true) {
+            bool found = false;
+            Si32 diskIndices[3];
             
-            dcs[0].disks[disk1].data_id = data_id;
-            dcs[1].disks[disk2].data_id = data_id;
-            dcs[2].disks[disk3].data_id = data_id;
+            for (Si32 dc = 0; dc < 3; ++dc) {
+                for (Si32 i = 0; i < GDisksPerDc; ++i) {
+                    if (!usedDisks[dc][i]) {
+                        diskIndices[dc] = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) break;
+            }
             
-            data_id++;
+            if (!found) break;
+            
+            for (Si32 dc = 0; dc < 3; ++dc) {
+                usedDisks[dc][diskIndices[dc]] = true;
+                Dcs[dc].Disks[diskIndices[dc]].GroupId = groupId;
+            }
+            groupId++;
         }
     }
 
     void SimulateHour() {
-        // Моделирование отказов
-        double failure_prob = g_failure_rate / (24.0 * g_disks_per_dc * 3);
+        double failuresThisHour = GFailureRate / 24.0;
+        Si32 failures = static_cast<Si32>(failuresThisHour);
         
-        for (auto& dc : dcs) {
-            for (auto& disk : dc.disks) {
-                if (disk.state == Disk::ACTIVE && Random32() % 1000000 < failure_prob * 1000000) {
-                    disk.state = Disk::INACTIVE;
-                    disk.inactive_time = current_time;
+
+        if (Random32() % 1000000 < (failuresThisHour - failures) * 1000000) {
+            failures++;
+        }
+
+        
+        for (Si32 i = 0; i < failures; ++i) {
+            Si32 attempts = 0;
+
+            while (attempts < 100) {
+                Si32 dcIndex = Random32() % 3;
+                Si32 diskIndex = Random32() % GDisksPerDc;
+                
+
+                Disk& disk = Dcs[dcIndex].Disks[diskIndex];
+                if (disk.State == Disk::Active && disk.GroupId >= 0) {
+                    disk.State = Disk::Inactive;
+                    disk.InactiveTime = CurrentTime;
+                    break;
                 }
-                else if (disk.state == Disk::INACTIVE) {
-                    // Проверка перехода в FAULTY
-                    if (current_time >= disk.inactive_time + 1.0) { // 1 час в INACTIVE
-                        disk.state = Disk::FAULTY;
-                        HandleDiskFailure(disk);
+                attempts++;
+            }
+        }
+
+        std::map<Si32, std::vector<Disk*>> disksByGroup;
+
+        for (auto& dc : Dcs) {
+            for (auto& disk : dc.Disks) {
+                if (disk.GroupId >= 0) {
+                    disksByGroup[disk.GroupId].push_back(&disk);
+                }
+            }
+        }
+
+        for (const auto& group : disksByGroup) {
+            const auto& groupDisks = group.second;
+            
+
+            Si32 activeDisks = 0;
+            Si32 inactiveDisks = 0;
+            Si32 faultyDisks = 0;
+            
+            for (const auto* disk : groupDisks) {
+                if (disk->State == Disk::Active) activeDisks++;
+                else if (disk->State == Disk::Inactive) inactiveDisks++;
+                else if (disk->State == Disk::Faulty) faultyDisks++;
+            }
+            if (inactiveDisks > 0) {
+                for (auto* disk : groupDisks) {
+                    if (disk->State == Disk::Inactive) {
+
+                        if (CurrentTime >= disk->InactiveTime + 1.0) {
+                            auto& dc = Dcs[disk->DcId];
+                            if (!dc.SpareDisks.empty()) {
+
+                                Si32 spareIndex = dc.SpareDisks.back();
+                                dc.SpareDisks.pop_back();
+                                
+                                Disk& newDisk = dc.Disks[spareIndex];
+                                newDisk.State = Disk::Inactive;
+                                newDisk.GroupId = group.first;
+                                
+                                double sizeMb = GDiskSize * 1024.0;
+                                newDisk.RebuildTime = CurrentTime + (sizeMb / GWriteSpeed) / 3600.0;
+                                
+
+                                disk->State = Disk::Faulty;
+                            } else {
+                                disk->State = Disk::Faulty;
+                                faultyDisks++;
+                            }
+
+                        }
                     }
                 }
             }
-        }
-        
-        current_time += 1.0; // +1 час
-    }
+            
+            if (activeDisks == 0 && (faultyDisks + inactiveDisks) == groupDisks.size()) {
+                LostData++;
+            }
 
-    void HandleDiskFailure(Disk& failed_disk) {
-        // Проверяем живые копии данных
-        Si32 data_id = failed_disk.data_id;
-        Si32 alive_copies = 0;
-        
-        for (const auto& dc : dcs) {
-            for (const auto& disk : dc.disks) {
-                if (disk.data_id == data_id && disk.state != Disk::FAULTY) {
-                    alive_copies++;
+        }
+
+        for (auto& dc : Dcs) {
+            for (auto& disk : dc.Disks) {
+                if (disk.State == Disk::Inactive && CurrentTime >= disk.RebuildTime) {
+
+                    disk.State = Disk::Active;
                 }
             }
         }
         
-        // Если все копии потеряны
-        if (alive_copies == 0) {
-            lost_data++;
-            return;
-        }
-        
-        // Восстановление на запасной диск
-        auto& dc = dcs[failed_disk.dc_id];
-        if (!dc.spare_disks.empty()) {
-            Si32 spare_idx = dc.spare_disks.back();
-            dc.spare_disks.pop_back();
-            
-            Disk& new_disk = dc.disks[spare_idx];
-            new_disk.state = Disk::INACTIVE;
-            new_disk.data_id = failed_disk.data_id;
-            // Время восстановления зависит от размера диска
-            new_disk.rebuild_time = current_time + (g_disk_size / 100.0); // 100 GB/час
-        }
+        CurrentTime += 1.0;
     }
 };
 
-Sim g_sim;
+Sim GSim;
 
-// Изменим тип для хранения статистики: ключ - день, значение - количество симуляций с потерей данных
-std::map<Si32, Si32> g_data_loss_by_day;
-std::map<Si32, Si32> g_total_sims_by_day; // общее количество симуляций для каждого дня
+std::map<Si32, Si32> DataLossByDay;
+std::map<Si32, Si32> TotalSimsByDay;
 
-void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Vec2Si32 size, const char* title) {
+void DrawCumulative(std::map<Si64, Si64>& valuesByCount, Rgba color, 
+                   Vec2Si32 position, Vec2Si32 size, const char* title) {
     std::vector<Vec2D> points;
-    points.reserve(n_by_value.size()+2);
+    points.reserve(valuesByCount.size() + 2);
 
-    if (n_by_value.size()) {
-        points.emplace_back(n_by_value.begin()->first, 0.0);
-    }
-    double total = 0.0;
-    for (auto it = n_by_value.begin(); it != n_by_value.end(); ++it) {
-        total += it->second;
-        points.emplace_back(it->first, total);
+    points.emplace_back(0.0, 0.0);
+
+    double totalSum = 0.0;
+    for (const auto& pair : valuesByCount) {
+        totalSum += pair.second;
+        points.emplace_back(pair.first, totalSum);
     }
     
-    if (points.size()) {
-        Vec2D min_v = points[0];
-        Vec2D max_v = points[0];
-        if (total > 0.0) {
-            for (auto it = points.begin(); it != points.end(); ++it) {
-                it->y /= total;
-                min_v.x = std::min(min_v.x, it->x);
-                min_v.y = std::min(min_v.y, it->y);
-                max_v.x = std::max(max_v.x, it->x);
-                max_v.y = std::max(max_v.y, it->y);
+    if (points.size() > 1) {
+        if (totalSum > 0.0) {
+            for (auto& point : points) {
+                point.y /= totalSum;
             }
         }
 
-        DrawRectangle(pos, pos+size, Rgba(32,32,32));
+        DrawRectangle(position, position + size, Rgba(32,32,32));
 
-        Vec2D scale = Vec2D(double(size.x) / (max_v.x - min_v.x), size.y);
-        Vec2D p0 = points[0];
-        for (Si32 i = 0; i < points.size(); ++i) {
-            Vec2D p1 = points[i];
-            Rgba color(255, 255, 255);
-            if (p1.y > 0) {
-                color = col;
-            }
-            DrawLine(pos+Vec2Si32(scale.x * (p0.x - min_v.x), scale.y * p0.y),
-                    pos+Vec2Si32(scale.x * (p1.x - min_v.x), scale.y * p1.y),
+        Vec2D scale = Vec2D(double(size.x) / 30.0, size.y);
+        Vec2D point0 = points[0];
+        
+        for (Si32 i = 1; i < points.size(); ++i) {
+            Vec2D point1 = points[i];
+            DrawLine(position + Vec2Si32(scale.x * point0.x, scale.y * point0.y),
+                    position + Vec2Si32(scale.x * point1.x, scale.y * point1.y),
                     color);
-            p0 = p1;
+            point0 = point1;
         }
 
-        g_font.Draw(title, pos.x, pos.y + size.y + 30, kTextOriginBottom);
+        GFont.Draw(title, position.x, position.y + size.y + 50, kTextOriginBottom);
+        GFont.Draw("Days", position.x + size.x/2, position.y - 20, kTextOriginTop);
+        GFont.Draw("Probability", position.x - 20, position.y + size.y/2, kTextOriginTop);
 
-        {
-            std::stringstream str;
-            str << min_v.x;
-            g_font.Draw(str.str().c_str(), pos.x, pos.y, kTextOriginTop);
-        }
-        {
-            std::stringstream str;
-            str << max_v.x;
-            g_font.Draw(str.str().c_str(), pos.x + size.x, pos.y, kTextOriginTop);
-        }
+        GFont.Draw("0", position.x, position.y, kTextOriginTop);
+        GFont.Draw("30", position.x + size.x, position.y, kTextOriginTop);
 
-        Si32 mx = MouseX();
-        Si32 vmx = mx - pos.x;
-        if (vmx >= 0 && vmx < size.x) {
-            Si64 day = vmx / scale.x + min_v.x;
+        Si32 mouseX = MouseX();
+        Si32 viewMouseX = mouseX - position.x;
+        if (viewMouseX >= 0 && viewMouseX < size.x) {
+            Si32 currentDay = viewMouseX * 30 / size.x;
+            
+            Si32 nearestIdx = 0;
             for (Si32 i = 0; i < points.size(); ++i) {
-                if (points[i].x > day) {
-                    Si32 ii = std::max(0, i-1);
-
-                    DrawLine(pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 0.0),
-                            pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 1.0),
-                            Rgba(128, 128, 128));
-
-                    std::stringstream str;
-                    str << std::fixed << std::setprecision(6)
-                        << "Day " << day 
-                        << "\nProbability of data loss: " 
-                        << (points[ii].y * 100.0) << "%";
-                    g_font.Draw(str.str().c_str(),
-                              pos.x + Si32(scale.x * (points[ii].x - min_v.x)),
-                              pos.y + Si32(scale.y * points[ii].y),
-                              kTextOriginTop);
+                if (points[i].x > currentDay) {
+                    nearestIdx = std::max(0, i-1);
                     break;
                 }
             }
-        }
+            
+            DrawLine(position + Vec2Si32(viewMouseX, 0),
+                    position + Vec2Si32(viewMouseX, size.y),
+                    Rgba(128, 128, 128));
 
-        // Подписи осей
-        g_font.Draw("Days", pos.x + size.x/2, pos.y - 20, kTextOriginTop);
-        g_font.Draw("Probability", pos.x - 20, pos.y + size.y/2, kTextOriginTop);
-
-        // При наведении мыши показываем вероятность
-        if (vmx >= 0 && vmx < size.x) {
-            Si64 day = vmx / scale.x + min_v.x;
-            for (Si32 i = 0; i < points.size(); ++i) {
-                if (points[i].x > day) {
-                    Si32 ii = std::max(0, i-1);
-                    
-                    DrawLine(pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 0.0),
-                            pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 1.0),
-                            Rgba(128, 128, 128));
-
-                    std::stringstream str;
-                    str << std::fixed << std::setprecision(6)
-                        << "Day " << day 
-                        << "\nProbability of data loss: " 
-                        << (points[ii].y * 100.0) << "%";
-                    g_font.Draw(str.str().c_str(),
-                              pos.x + Si32(scale.x * (points[ii].x - min_v.x)),
-                              pos.y + Si32(scale.y * points[ii].y),
-                              kTextOriginTop);
-                    break;
-                }
-            }
+            std::stringstream str;
+            str << std::fixed << std::setprecision(6)
+                << "Day " << currentDay 
+                << "\nProbability of data loss: " 
+                << (points[nearestIdx].y * 100.0) << "%";
+            GFont.Draw(str.str().c_str(),
+                      mouseX,
+                      position.y + Si32(scale.y * points[nearestIdx].y),
+                      kTextOriginTop);
         }
     }
 }
@@ -263,152 +292,215 @@ void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Ve
 void UpdateText() {
     using namespace std;
     
-    if (g_disks_per_dc != g_scroll_disks_per_dc->GetValue()) {
-        g_disks_per_dc = g_scroll_disks_per_dc->GetValue();
-        g_do_restart = true;  // Добавить эту строку
+    if (GDisksPerDc != GScrollDisksPerDc->GetValue()) {
+        GDisksPerDc = GScrollDisksPerDc->GetValue();
+        GDoRestart = true;
+
         stringstream str;
-        str << "Disks per DC: " << g_disks_per_dc;
-        g_text_disks_per_dc->SetText(str.str());
+        str << "Disks per DC: " << GDisksPerDc;
+        GTextDisksPerDc->SetText(str.str());
     }
     
-    if (g_disk_size != g_scroll_disk_size->GetValue()) {
-        g_disk_size = g_scroll_disk_size->GetValue();
-        g_do_restart = true;  // Добавить эту строку
+    if (GDiskSize != GScrollDiskSize->GetValue()) {
+        GDiskSize = GScrollDiskSize->GetValue();
+        GDoRestart = true;
         stringstream str;
-        str << "Disk Size: " << g_disk_size << " GB";
-        g_text_disk_size->SetText(str.str());
+        str << "Disk Size: " << GDiskSize << " GB";
+        GTextDiskSize->SetText(str.str());
     }
     
-    if (g_failure_rate != g_scroll_failure_rate->GetValue()) {
-        g_failure_rate = g_scroll_failure_rate->GetValue();
-        g_do_restart = true;  // Добавить эту строку
+    if (GFailureRate != GScrollFailureRate->GetValue()) {
+        GFailureRate = GScrollFailureRate->GetValue();
+        GDoRestart = true;
         stringstream str;
-        str << "Failure Rate: " << g_failure_rate << " disks/day";
-        g_text_failure_rate->SetText(str.str());
+        str << "Failure Rate: " << GFailureRate << " disks/day";
+        GTextFailureRate->SetText(str.str());
+    }
+    
+    if (GSpareDisksPerDc != GScrollSpareDisks->GetValue()) {
+        GSpareDisksPerDc = GScrollSpareDisks->GetValue();
+        GDoRestart = true;
+        stringstream str;
+        str << "Spare Disks per DC: " << GSpareDisksPerDc;
+        GTextSpareDisks->SetText(str.str());
+    }
+    
+    if (GWriteSpeed != GScrollWriteSpeed->GetValue()) {
+        GWriteSpeed = GScrollWriteSpeed->GetValue();
+        GDoRestart = true;
+        stringstream str;
+        str << "Write Speed: " << GWriteSpeed << " MB/s";
+        GTextWriteSpeed->SetText(str.str());
     }
     
     stringstream stats;
-    stats << "Simulations: " << g_sims << "\n";
+    stats << "Simulations: " << GSims << "\n";
     stats << "Data Loss Probability: " << fixed << setprecision(6) 
-          << g_data_loss_prob * 100.0 << "%";
-    g_text_stats->SetText(stats.str());
+
+          << GDataLossProb * 100.0 << "%";
+    GTextStats->SetText(stats.str());
 }
 
 void UpdateModel() {
-    if (g_do_restart) {
-        g_do_restart = false;
-        g_sim.Reset();
-        g_data_loss_by_day.clear();
-        g_total_sims_by_day.clear();
-        g_sims = 0;
+    if (GDoRestart) {
+        GDoRestart = false;
+        GSim.Reset();
+        DataLossByDay.clear();
+        TotalSimsByDay.clear();
+        GSims = 0;
     }
     
-    double t0 = Time();
-    while (Time() - t0 < 1.0/60.0) {
-        g_sim.Reset();
-        bool had_data_loss = false;
+    GSim.Reset();
+    bool hadDataLoss = false;
+    
+    for (Si32 day = 0; day < 30; ++day) {
+        TotalSimsByDay[day]++;
         
-        // Симулируем 30 дней
-        for (Si32 day = 0; day < 30; ++day) {
-            for (Si32 hour = 0; hour < 24; ++hour) {
-                g_sim.SimulateHour();
-            }
+
+        for (Si32 hour = 0; hour < 24; ++hour) {
+            GSim.SimulateHour();
             
-            // Увеличиваем счетчик симуляций для текущего дня
-            g_total_sims_by_day[day]++;
-            
-            // Если в этот день произошла потеря данных
-            if (g_sim.lost_data > 0 && !had_data_loss) {
-                g_data_loss_by_day[day]++;
-                had_data_loss = true; // отмечаем, что уже была потеря данных
+            if (GSim.LostData > 0 && !hadDataLoss) {
+                DataLossByDay[day]++;
+                hadDataLoss = true;
+                break;
             }
         }
-        g_sims++;
+        
+        if (hadDataLoss) {
+            for (Si32 remainingDay = day + 1; remainingDay < 30; ++remainingDay) {
+                TotalSimsByDay[remainingDay]++;
+                DataLossByDay[remainingDay]++;
+            }
+            break;
+        }
+    }
+    GSims++;
+
+    if (!TotalSimsByDay.empty()) {
+        GDataLossProb = static_cast<double>(DataLossByDay[29]) / 
+                       static_cast<double>(TotalSimsByDay[29]);
     }
 }
 
 void DrawModel() {
-    std::map<Si64, Si64> probability_by_day;
-    for (const auto& pair : g_data_loss_by_day) {
-        Si32 day = pair.first;
-        Si32 losses = pair.second;
-        double prob = static_cast<double>(losses) / g_total_sims_by_day[day];
-        probability_by_day[day] = static_cast<Si64>(prob * 1000000);
+    std::map<Si64, Si64> probabilityByDay;
+    
+    Si32 totalLosses = 0;
+    for (Si32 day = 0; day < 30; ++day) {
+        if (TotalSimsByDay[day] > 0) {
+            totalLosses += DataLossByDay[day];
+            double probability = static_cast<double>(totalLosses) / 
+                               static_cast<double>(TotalSimsByDay[day]);
+            probabilityByDay[day] = static_cast<Si64>(probability * 1000000);
+        }
     }
     
-    DrawCumulative(probability_by_day, Rgba(255, 0, 0),
-                  Vec2Si32(LEFT_MARGIN, TOP_MARGIN), 
-                  Vec2Si32(GRAPH_WIDTH, GRAPH_HEIGHT),
+    DrawCumulative(probabilityByDay, Rgba(255, 0, 0),
+                  Vec2Si32(kLeftMargin, kTopMargin), 
+                  Vec2Si32(kGraphWidth, kGraphHeight),
                   "Data Loss Probability Distribution");
 }
 
 void EasyMain() {
-    g_theme = std::make_shared<GuiTheme>();
-    g_theme->Load("data/gui_theme.xml");
-    g_font.Load("data/arctic_one_bmf.fnt");
-    ResizeScreen(1920, 1080);
+    GTheme = std::make_shared<GuiTheme>();
+    GTheme->Load("data/gui_theme.xml");
+    GFont.Load("data/arctic_one_bmf.fnt");
+    ResizeScreen(kScreenWidth, kScreenHeight);
 
-    GuiFactory gf;
-    gf.theme_ = g_theme;
-    g_gui = gf.MakeTransparentPanel();
+    GuiFactory guiFactory;
+    guiFactory.theme_ = GTheme;
+    GGui = guiFactory.MakeTransparentPanel();
 
-    g_scroll_disks_per_dc = gf.MakeHorizontalScrollbar();
-    g_scroll_disks_per_dc->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 100);
-    g_scroll_disks_per_dc->OnScrollChange = UpdateText;
-    g_scroll_disks_per_dc->SetWidth(300);
-    g_scroll_disks_per_dc->SetMinValue(10);
-    g_scroll_disks_per_dc->SetMaxValue(1000);
-    g_scroll_disks_per_dc->SetValue(100);
-    g_gui->AddChild(g_scroll_disks_per_dc);
 
-    g_scroll_disk_size = gf.MakeHorizontalScrollbar();
-    g_scroll_disk_size->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 200);
-    g_scroll_disk_size->OnScrollChange = UpdateText;
-    g_scroll_disk_size->SetWidth(300);
-    g_scroll_disk_size->SetMinValue(100);
-    g_scroll_disk_size->SetMaxValue(16384);
-    g_scroll_disk_size->SetValue(4096);
-    g_gui->AddChild(g_scroll_disk_size);
+    GScrollDisksPerDc = guiFactory.MakeHorizontalScrollbar();
+    GScrollDisksPerDc->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 100);
+    GScrollDisksPerDc->OnScrollChange = UpdateText;
+    GScrollDisksPerDc->SetWidth(300);
+    GScrollDisksPerDc->SetMinValue(10);
+    GScrollDisksPerDc->SetMaxValue(1000);
+    GScrollDisksPerDc->SetValue(100);
+    GGui->AddChild(GScrollDisksPerDc);
 
-    g_scroll_failure_rate = gf.MakeHorizontalScrollbar();
-    g_scroll_failure_rate->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 300);
-    g_scroll_failure_rate->OnScrollChange = UpdateText;
-    g_scroll_failure_rate->SetWidth(300);
-    g_scroll_failure_rate->SetMinValue(1);
-    g_scroll_failure_rate->SetMaxValue(100);
-    g_scroll_failure_rate->SetValue(3);
-    g_gui->AddChild(g_scroll_failure_rate);
+    GScrollDiskSize = guiFactory.MakeHorizontalScrollbar();
+    GScrollDiskSize->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 200);
+    GScrollDiskSize->OnScrollChange = UpdateText;
+    GScrollDiskSize->SetWidth(300);
+    GScrollDiskSize->SetMinValue(100);
+    GScrollDiskSize->SetMaxValue(16384);
+    GScrollDiskSize->SetValue(4096);
+    GGui->AddChild(GScrollDiskSize);
 
-    g_text_disks_per_dc = gf.MakeText();
-    g_text_disks_per_dc->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 100 + 29);
-    g_text_disks_per_dc->SetText("Disks per DC: " + std::to_string(g_disks_per_dc));
-    g_gui->AddChild(g_text_disks_per_dc);
+    GScrollFailureRate = guiFactory.MakeHorizontalScrollbar();
+    GScrollFailureRate->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 300);
+    GScrollFailureRate->OnScrollChange = UpdateText;
+    GScrollFailureRate->SetWidth(300);
+    GScrollFailureRate->SetMinValue(1);
+    GScrollFailureRate->SetMaxValue(100);
+    GScrollFailureRate->SetValue(3);
+    GGui->AddChild(GScrollFailureRate);
 
-    g_text_disk_size = gf.MakeText();
-    g_text_disk_size->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 200 + 29);
-    g_text_disk_size->SetText("Disk Size: " + std::to_string(g_disk_size) + " GB");
-    g_gui->AddChild(g_text_disk_size);
+    GScrollSpareDisks = guiFactory.MakeHorizontalScrollbar();
+    GScrollSpareDisks->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 400);
+    GScrollSpareDisks->OnScrollChange = UpdateText;
+    GScrollSpareDisks->SetWidth(300);
+    GScrollSpareDisks->SetMinValue(1);
+    GScrollSpareDisks->SetMaxValue(100);
+    GScrollSpareDisks->SetValue(10);
+    GGui->AddChild(GScrollSpareDisks);
 
-    g_text_failure_rate = gf.MakeText();
-    g_text_failure_rate->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 300 + 29);
-    g_text_failure_rate->SetText("Failure Rate: " + std::to_string(g_failure_rate) + " disks/day");
-    g_gui->AddChild(g_text_failure_rate);
+    GScrollWriteSpeed = guiFactory.MakeHorizontalScrollbar();
+    GScrollWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500);
+    GScrollWriteSpeed->OnScrollChange = UpdateText;
+    GScrollWriteSpeed->SetWidth(300);
+    GScrollWriteSpeed->SetMinValue(50);    // 50 MB/s
+    GScrollWriteSpeed->SetMaxValue(1000);  // 1000 MB/s
+    GScrollWriteSpeed->SetValue(100);
+    GGui->AddChild(GScrollWriteSpeed);
 
-    g_text_stats = gf.MakeText();
-    g_text_stats->SetPos(LEFT_MARGIN, TOP_MARGIN + GRAPH_HEIGHT + 20);
-    g_text_stats->SetText("Simulations: 0\nData Loss Probability: 0.000000%");
-    g_gui->AddChild(g_text_stats);
+    GTextDisksPerDc = guiFactory.MakeText();
+    GTextDisksPerDc->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 100 + 29);
+    GTextDisksPerDc->SetText("Disks per DC: " + std::to_string(GDisksPerDc));
+    GGui->AddChild(GTextDisksPerDc);
+
+    GTextDiskSize = guiFactory.MakeText();
+    GTextDiskSize->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 200 + 29);
+    GTextDiskSize->SetText("Disk Size: " + std::to_string(GDiskSize) + " GB");
+    GGui->AddChild(GTextDiskSize);
+
+    GTextFailureRate = guiFactory.MakeText();
+    GTextFailureRate->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 300 + 29);
+    GTextFailureRate->SetText("Failure Rate: " + std::to_string(GFailureRate) + " disks/day");
+    GGui->AddChild(GTextFailureRate);
+
+    GTextSpareDisks = guiFactory.MakeText();
+    GTextSpareDisks->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 400 + 29);
+    GTextSpareDisks->SetText("Spare Disks per DC: " + std::to_string(GSpareDisksPerDc));
+    GGui->AddChild(GTextSpareDisks);
+
+    GTextWriteSpeed = guiFactory.MakeText();
+    GTextWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500 + 29);
+    GTextWriteSpeed->SetText("Write Speed: " + std::to_string(GWriteSpeed) + " MB/s");
+    GGui->AddChild(GTextWriteSpeed);
+
+    GTextStats = guiFactory.MakeText();
+    GTextStats->SetPos(kLeftMargin, kTopMargin + kGraphHeight + 70);
+    GTextStats->SetText("Simulations: 0\nData Loss Probability: 0.000000%");
+    GGui->AddChild(GTextStats);
+
 
     UpdateText();
 
     while (!IsKeyDownward(kKeyEscape)) {
         Clear();
         UpdateModel();
-        for (Si32 i = 0; i < InputMessageCount(); ++i) {
-            g_gui->ApplyInput(GetInputMessage(i), nullptr);
+        for (Si32 messageIndex = 0; messageIndex < InputMessageCount(); ++messageIndex) {
+            GGui->ApplyInput(GetInputMessage(messageIndex), nullptr);
         }
         DrawModel();
-        g_gui->Draw(Vec2Si32(0, 0));
+        UpdateText();
+        GGui->Draw(Vec2Si32(0, 0));
         ShowFrame();
     }
 }
+
