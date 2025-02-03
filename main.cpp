@@ -26,6 +26,15 @@ Si32 g_failure_rate = 3;      // failures/day
 Ui64 g_sims = 0;
 double g_data_loss_prob = 0.0;
 
+bool g_do_restart = true;  // Добавить в глобальные переменные
+
+const Si32 GRAPH_WIDTH = 1200;  // Увеличим с 800 до 1200
+const Si32 GRAPH_HEIGHT = 500;
+const Si32 SCREEN_WIDTH = 1920;
+const Si32 SCREEN_HEIGHT = 1080;
+const Si32 LEFT_MARGIN = (SCREEN_WIDTH - GRAPH_WIDTH) / 2;
+const Si32 TOP_MARGIN = (SCREEN_HEIGHT - GRAPH_HEIGHT) / 2;
+
 struct Disk {
     enum State { ACTIVE, INACTIVE, FAULTY };
     State state = ACTIVE;
@@ -135,7 +144,9 @@ struct Sim {
 
 Sim g_sim;
 
-std::map<Si64, Si64> g_data_loss_stats; // Статистика потери данных
+// Изменим тип для хранения статистики: ключ - день, значение - количество симуляций с потерей данных
+std::map<Si32, Si32> g_data_loss_by_day;
+std::map<Si32, Si32> g_total_sims_by_day; // общее количество симуляций для каждого дня
 
 void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Vec2Si32 size, const char* title) {
     std::vector<Vec2D> points;
@@ -179,7 +190,7 @@ void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Ve
             p0 = p1;
         }
 
-        g_font.Draw(title, pos.x, pos.y + size.y, kTextOriginBottom);
+        g_font.Draw(title, pos.x, pos.y + size.y + 30, kTextOriginBottom);
 
         {
             std::stringstream str;
@@ -195,9 +206,9 @@ void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Ve
         Si32 mx = MouseX();
         Si32 vmx = mx - pos.x;
         if (vmx >= 0 && vmx < size.x) {
-            Si64 xx = vmx / scale.x + min_v.x;
+            Si64 day = vmx / scale.x + min_v.x;
             for (Si32 i = 0; i < points.size(); ++i) {
-                if (points[i].x > xx) {
+                if (points[i].x > day) {
                     Si32 ii = std::max(0, i-1);
 
                     DrawLine(pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 0.0),
@@ -205,10 +216,42 @@ void DrawCumulative(std::map<Si64, Si64> &n_by_value, Rgba col, Vec2Si32 pos, Ve
                             Rgba(128, 128, 128));
 
                     std::stringstream str;
-                    str << points[ii].y*100.0 << "%\n" << points[ii].x << " data blocks lost";
+                    str << std::fixed << std::setprecision(6)
+                        << "Day " << day 
+                        << "\nProbability of data loss: " 
+                        << (points[ii].y * 100.0) << "%";
                     g_font.Draw(str.str().c_str(),
-                              pos.x+Si32(scale.x * (points[ii].x - min_v.x)),
-                              pos.y+Si32(scale.y * points[ii].y),
+                              pos.x + Si32(scale.x * (points[ii].x - min_v.x)),
+                              pos.y + Si32(scale.y * points[ii].y),
+                              kTextOriginTop);
+                    break;
+                }
+            }
+        }
+
+        // Подписи осей
+        g_font.Draw("Days", pos.x + size.x/2, pos.y - 20, kTextOriginTop);
+        g_font.Draw("Probability", pos.x - 20, pos.y + size.y/2, kTextOriginTop);
+
+        // При наведении мыши показываем вероятность
+        if (vmx >= 0 && vmx < size.x) {
+            Si64 day = vmx / scale.x + min_v.x;
+            for (Si32 i = 0; i < points.size(); ++i) {
+                if (points[i].x > day) {
+                    Si32 ii = std::max(0, i-1);
+                    
+                    DrawLine(pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 0.0),
+                            pos+Vec2Si32(scale.x * (points[ii].x - min_v.x), scale.y * 1.0),
+                            Rgba(128, 128, 128));
+
+                    std::stringstream str;
+                    str << std::fixed << std::setprecision(6)
+                        << "Day " << day 
+                        << "\nProbability of data loss: " 
+                        << (points[ii].y * 100.0) << "%";
+                    g_font.Draw(str.str().c_str(),
+                              pos.x + Si32(scale.x * (points[ii].x - min_v.x)),
+                              pos.y + Si32(scale.y * points[ii].y),
                               kTextOriginTop);
                     break;
                 }
@@ -222,6 +265,7 @@ void UpdateText() {
     
     if (g_disks_per_dc != g_scroll_disks_per_dc->GetValue()) {
         g_disks_per_dc = g_scroll_disks_per_dc->GetValue();
+        g_do_restart = true;  // Добавить эту строку
         stringstream str;
         str << "Disks per DC: " << g_disks_per_dc;
         g_text_disks_per_dc->SetText(str.str());
@@ -229,6 +273,7 @@ void UpdateText() {
     
     if (g_disk_size != g_scroll_disk_size->GetValue()) {
         g_disk_size = g_scroll_disk_size->GetValue();
+        g_do_restart = true;  // Добавить эту строку
         stringstream str;
         str << "Disk Size: " << g_disk_size << " GB";
         g_text_disk_size->SetText(str.str());
@@ -236,6 +281,7 @@ void UpdateText() {
     
     if (g_failure_rate != g_scroll_failure_rate->GetValue()) {
         g_failure_rate = g_scroll_failure_rate->GetValue();
+        g_do_restart = true;  // Добавить эту строку
         stringstream str;
         str << "Failure Rate: " << g_failure_rate << " disks/day";
         g_text_failure_rate->SetText(str.str());
@@ -249,27 +295,50 @@ void UpdateText() {
 }
 
 void UpdateModel() {
-    g_sim.Reset();
+    if (g_do_restart) {
+        g_do_restart = false;
+        g_sim.Reset();
+        g_data_loss_by_day.clear();
+        g_total_sims_by_day.clear();
+        g_sims = 0;
+    }
     
     double t0 = Time();
     while (Time() - t0 < 1.0/60.0) {
+        g_sim.Reset();
+        bool had_data_loss = false;
+        
         // Симулируем 30 дней
         for (Si32 day = 0; day < 30; ++day) {
             for (Si32 hour = 0; hour < 24; ++hour) {
                 g_sim.SimulateHour();
             }
-        }
-        
-        if (g_sim.lost_data > 0) {
-            g_data_loss_stats[g_sim.lost_data]++;
+            
+            // Увеличиваем счетчик симуляций для текущего дня
+            g_total_sims_by_day[day]++;
+            
+            // Если в этот день произошла потеря данных
+            if (g_sim.lost_data > 0 && !had_data_loss) {
+                g_data_loss_by_day[day]++;
+                had_data_loss = true; // отмечаем, что уже была потеря данных
+            }
         }
         g_sims++;
     }
 }
 
 void DrawModel() {
-    DrawCumulative(g_data_loss_stats, Rgba(255, 0, 0),
-                  Vec2Si32(300, 50), Vec2Si32(1600, 500),
+    std::map<Si64, Si64> probability_by_day;
+    for (const auto& pair : g_data_loss_by_day) {
+        Si32 day = pair.first;
+        Si32 losses = pair.second;
+        double prob = static_cast<double>(losses) / g_total_sims_by_day[day];
+        probability_by_day[day] = static_cast<Si64>(prob * 1000000);
+    }
+    
+    DrawCumulative(probability_by_day, Rgba(255, 0, 0),
+                  Vec2Si32(LEFT_MARGIN, TOP_MARGIN), 
+                  Vec2Si32(GRAPH_WIDTH, GRAPH_HEIGHT),
                   "Data Loss Probability Distribution");
 }
 
@@ -284,7 +353,8 @@ void EasyMain() {
     g_gui = gf.MakeTransparentPanel();
 
     g_scroll_disks_per_dc = gf.MakeHorizontalScrollbar();
-    g_scroll_disks_per_dc->SetPos(16, 400);
+    g_scroll_disks_per_dc->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 100);
+    g_scroll_disks_per_dc->OnScrollChange = UpdateText;
     g_scroll_disks_per_dc->SetWidth(300);
     g_scroll_disks_per_dc->SetMinValue(10);
     g_scroll_disks_per_dc->SetMaxValue(1000);
@@ -292,7 +362,8 @@ void EasyMain() {
     g_gui->AddChild(g_scroll_disks_per_dc);
 
     g_scroll_disk_size = gf.MakeHorizontalScrollbar();
-    g_scroll_disk_size->SetPos(16, 300);
+    g_scroll_disk_size->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 200);
+    g_scroll_disk_size->OnScrollChange = UpdateText;
     g_scroll_disk_size->SetWidth(300);
     g_scroll_disk_size->SetMinValue(100);
     g_scroll_disk_size->SetMaxValue(16384);
@@ -300,7 +371,8 @@ void EasyMain() {
     g_gui->AddChild(g_scroll_disk_size);
 
     g_scroll_failure_rate = gf.MakeHorizontalScrollbar();
-    g_scroll_failure_rate->SetPos(16, 200);
+    g_scroll_failure_rate->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 300);
+    g_scroll_failure_rate->OnScrollChange = UpdateText;
     g_scroll_failure_rate->SetWidth(300);
     g_scroll_failure_rate->SetMinValue(1);
     g_scroll_failure_rate->SetMaxValue(100);
@@ -308,19 +380,23 @@ void EasyMain() {
     g_gui->AddChild(g_scroll_failure_rate);
 
     g_text_disks_per_dc = gf.MakeText();
-    g_text_disks_per_dc->SetPos(16, 400+29);
+    g_text_disks_per_dc->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 100 + 29);
+    g_text_disks_per_dc->SetText("Disks per DC: " + std::to_string(g_disks_per_dc));
     g_gui->AddChild(g_text_disks_per_dc);
 
     g_text_disk_size = gf.MakeText();
-    g_text_disk_size->SetPos(16, 300+29);
+    g_text_disk_size->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 200 + 29);
+    g_text_disk_size->SetText("Disk Size: " + std::to_string(g_disk_size) + " GB");
     g_gui->AddChild(g_text_disk_size);
 
     g_text_failure_rate = gf.MakeText();
-    g_text_failure_rate->SetPos(16, 200+29);
+    g_text_failure_rate->SetPos(LEFT_MARGIN - 320, TOP_MARGIN + 300 + 29);
+    g_text_failure_rate->SetText("Failure Rate: " + std::to_string(g_failure_rate) + " disks/day");
     g_gui->AddChild(g_text_failure_rate);
 
     g_text_stats = gf.MakeText();
-    g_text_stats->SetPos(300, 50);
+    g_text_stats->SetPos(LEFT_MARGIN, TOP_MARGIN + GRAPH_HEIGHT + 20);
+    g_text_stats->SetText("Simulations: 0\nData Loss Probability: 0.000000%");
     g_gui->AddChild(g_text_stats);
 
     UpdateText();
