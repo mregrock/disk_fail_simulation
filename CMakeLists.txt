@@ -18,9 +18,9 @@ set(PROJECT_NAME simulation_fail_disks)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # Folders files
 set(DATA_DIR .)
-set(CPP_DIR_1 ../arctic/engine)
+set(CPP_DIR_1 arctic/engine)
 set(CPP_DIR_2 .)
-set(HEADER_DIR_1 ../arctic/engine)
+set(HEADER_DIR_1 arctic/engine)
 set(HEADER_DIR_2 .)
 
 file(GLOB_RECURSE RES_SOURCES "${DATA_DIR}/data/*")
@@ -92,9 +92,9 @@ ELSE (APPLE)
   )
 ENDIF (APPLE)
 
-include_directories(${CMAKE_SOURCE_DIR}/..)
-include_directories(${CMAKE_SOURCE_DIR}/../arctic)
+include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/arctic)
 
 ################# Flags ################
 # Defines Flags for Windows and Linux. #
