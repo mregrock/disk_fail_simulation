@@ -8,8 +8,7 @@ const Ui32 kScreenWidth = 1920;
 const Ui32 kScreenHeight = 1080;
 
 void SimulationController::Initialize() {
-    LOG("Initializing SimulationController");
-    
+    LOG("Initializing SimulationController"); 
     try {
         ResizeScreen(kScreenWidth, kScreenHeight);
         LOG_DEBUG("Screen resized to " + std::to_string(kScreenWidth) + "x" + std::to_string(kScreenHeight));

@@ -99,7 +99,7 @@ void Simulation::ProcessGroups() {
         }
     }
 
-    LOG_DEBUG("Processing " + std::to_string(disksByGroup.size()) + " groups");
+    // LOG_DEBUG("Processing " + std::to_string(disksByGroup.size()) + " groups");
 
     for (const auto& group : disksByGroup) {
         const auto& groupDisks = group.second;

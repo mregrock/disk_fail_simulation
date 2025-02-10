@@ -5,6 +5,8 @@
 using namespace arctic;
 
 void EasyMain() {
+    Logger::Init("debug.log", 300, Logger::OutputMode::FILE_ONLY);
+    
     LOG_DEBUG("Application starting");
     SimulationController controller;
     controller.Initialize();
