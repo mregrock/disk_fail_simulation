@@ -208,12 +208,16 @@ end_simulation:
 }
 
 void SimulationController::UpdateStatistics() {
-    if (!TotalSimsByDay.empty()) {
-        GDataLossProb = static_cast<double>(DataLossByDay[29]) / 
-                       static_cast<double>(TotalSimsByDay[29]);
-        LOG_DEBUG("Updated probability: " + std::to_string(GDataLossProb));
-        LOG_DEBUG("Data losses on day 29: " + std::to_string(DataLossByDay[29]));
-        LOG_DEBUG("Total sims on day 29: " + std::to_string(TotalSimsByDay[29]));
+    if (GSims > 0) {
+        double overallLossCount = DataLossByDay.count(29) ? DataLossByDay[29] : 0.0;
+        GDataLossProb = overallLossCount / static_cast<double>(GSims);
+
+        LOG_DEBUG("UpdateStatistics: Overall Stats - Total Losses: " + std::to_string(overallLossCount) +
+                   ", Total Sims Run: " + std::to_string(GSims));
+        LOG_DEBUG("UpdateStatistics: Calculated GDataLossProb = " + std::to_string(GDataLossProb));
+    } else {
+        GDataLossProb = 0.0;
+        LOG_DEBUG("UpdateStatistics: No simulations run yet.");
     }
 }
 

@@ -15,7 +15,7 @@ public:
         BOTH
     };
 
-    static void Init(const std::string& filename = "debug.log", size_t maxLines = 300, OutputMode mode = OutputMode::BOTH);
+    static void Init(const std::string& filename = "debug.log", size_t maxLines = 1000, OutputMode mode = OutputMode::BOTH);
     static void Log(const std::string& message);
     static void LogError(const std::string& message);
     static void LogDebug(const std::string& message);
@@ -24,15 +24,16 @@ public:
 
 private:
     static void WriteToLog(const std::string& message);
-    static void TrimLog();
+    static void TrimLogFile();
 
     static std::ofstream file;
     static bool initialized;
-    static std::deque<std::string> logLines;
     static size_t maxLogLines;
     static std::string logFilename;
     static OutputMode outputMode;
     static std::mutex logMutex;
+    static size_t logCallsSinceLastTrim;
+    static const size_t kTrimCheckFrequency = 1000;
 };
 
 #define LOG(msg) Logger::Log(msg)

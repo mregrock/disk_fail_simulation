@@ -15,6 +15,8 @@ const Ui32 kLeftMargin = (kScreenWidth - kGraphWidth) / 2;
 const Ui32 kTopMargin = (kScreenHeight - kGraphHeight) / 2;
 const Ui32 kControlsYOffset = -70;
 
+extern double GDataLossProb;
+
 void InitializeGui(GuiElements& gui) {
     LOG("Initializing GUI");
     gui.Theme = std::make_shared<GuiTheme>();
@@ -105,14 +107,17 @@ void InitializeGui(GuiElements& gui) {
 }
 
 void UpdateGuiText(GuiElements& gui) {
-    using namespace std;
+    std::stringstream ss;
+    ss << "Simulations: " << GSims;
+    gui.TextStats->SetText(ss.str());
 
-    stringstream str;
-    str << "Simulations: " << GSims << "\n";
-    str << "Data Loss Probability: " << fixed << setprecision(6) 
-        << GDataLossProb * 100.0 << "%";
-    gui.TextStats->SetText(str.str());
+    // Комментируем или удаляем строки, отвечающие за TextDataLoss
+    // ss.str("");
+    // ss.clear();
+    // ss << std::fixed << std::setprecision(8) << "Data Loss Probability: " << GDataLossProb * 100.0 << "%";
+    // gui.TextDataLoss->SetText(ss.str());
 
+    // Оставляем остальной код обновления текста без изменений
 }
 
 void DrawCumulative(const std::map<Si64, Si64>& valuesByCount, Rgba color, 
