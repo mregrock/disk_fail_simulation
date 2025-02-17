@@ -112,4 +112,24 @@ void Logger::LogDebug(const std::string& message) {
     }
 }
 
+void Logger::LogWarning(const std::string& message) {
+    if (!initialized) Init();
+
+    time_t now = time(0);
+    std::string datetime = ctime(&now);
+    datetime = datetime.substr(0, datetime.length()-1);
+
+    std::stringstream ss;
+    ss << "[" << datetime << "] WARNING: " << message << std::endl;
+    std::string logMessage = ss.str();
+
+    if (outputMode != OutputMode::CONSOLE_ONLY) {
+        WriteToLog(logMessage);
+    }
+
+    if (outputMode != OutputMode::FILE_ONLY) {
+        std::cout << "\033[1;33m" << logMessage << "\033[0m";
+    }
+}
+
 } // namespace arctic 

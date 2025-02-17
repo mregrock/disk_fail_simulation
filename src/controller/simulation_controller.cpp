@@ -1,11 +1,21 @@
 #include "simulation_controller.h"
 #include <map>
 #include "../utils/logger.h"
+#include <functional> 
+#include <thread>
+#include <future>
 
 namespace arctic {
 
 const Ui32 kScreenWidth = 1920;
 const Ui32 kScreenHeight = 1080;
+
+
+std::mt19937& GetThreadLocalRng() {
+    thread_local static std::mt19937 rng(std::random_device{}() + 
+                                         std::hash<std::thread::id>{}(std::this_thread::get_id()));
+    return rng;
+}
 
 void SimulationController::Initialize() {
     LOG("Initializing SimulationController"); 
@@ -39,24 +49,57 @@ void SimulationController::Update() {
     if (GDoRestart) {
         LOG_DEBUG("Restarting simulation");
         GDoRestart = false;
-        Sim.Reset();
+
         DataLossByDay.clear();
         TotalSimsByDay.clear();
         GSims = 0;
     }
 
-    static bool simulationInProgress = false;
-    if (!simulationInProgress) {
-        LOG_DEBUG("Starting new simulation frame");
-        simulationInProgress = true;
-        RunSimulation();
-        UpdateStatistics();
-        simulationInProgress = false;
-        LOG_DEBUG("Simulation frame completed");
-    } else {
-        LOG_DEBUG("Simulation already in progress, skipping");
+    const unsigned int num_threads = 1; 
+    LOG_DEBUG("Launching " + std::to_string(num_threads) + " simulation threads.");
+
+
+    std::vector<std::future<SimulationResult>> futures;
+
+
+    for (unsigned int i = 0; i < num_threads; ++i) {
+
+
+        futures.push_back(std::async(std::launch::async, &SimulationController::RunSingleSimulation, this));
     }
-    LOG_DEBUG("Update end");
+
+
+    for (auto& fut : futures) {
+        try {
+            SimulationResult result = fut.get(); 
+
+
+            GSims++;
+
+
+            for (int day = 0; day < result.daysSimulated; ++day) {
+                if (!TotalSimsByDay.count(day)) TotalSimsByDay[day] = 0;
+                TotalSimsByDay[day]++;
+            }
+
+
+            if (result.lossDay != -1) {
+                for (int d = result.lossDay; d < 30; ++d) {
+                    if (!DataLossByDay.count(d)) DataLossByDay[d] = 0;
+                    DataLossByDay[d]++;
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("Exception caught while getting simulation result: " + std::string(e.what()));
+        } catch (...) {
+            LOG_ERROR("Unknown exception caught while getting simulation result.");
+        }
+    }
+
+
+    UpdateStatistics();
+
+    LOG_DEBUG("Update end, total simulations: " + std::to_string(GSims));
 }
 
 void SimulationController::ProcessInput() {
@@ -67,40 +110,97 @@ void SimulationController::ProcessInput() {
     LOG_DEBUG("Processing input end");
 }
 
+
+SimulationResult SimulationController::RunSingleSimulation() {
+
+    auto& rng = GetThreadLocalRng();
+
+    Simulation localSim; 
+    localSim.Reset();    
+
+    SimulationResult result;
+    bool hadDataLoss = false;
+
+    const Si32 maxIterations = 30 * 24; 
+    Si32 iterations = 0;
+
+    for (int day = 0; day < 30; ++day) {
+        result.daysSimulated++; 
+
+        for (int hour = 0; hour < 24; ++hour) {
+            iterations++;
+            if (iterations > maxIterations) {
+                LOG_ERROR("Single simulation exceeded maximum iterations!");
+
+
+                return result;
+            }
+
+            localSim.SimulateHour(rng);
+            if (!localSim.LostGroupInfo.empty()) { 
+                 if (!hadDataLoss) {
+                     result.lossDay = day;
+                     hadDataLoss = true;
+                 }
+                 break;
+            }
+        }
+        if (hadDataLoss) {
+            break;
+        }
+    }
+
+    return result;
+}
+
 void SimulationController::RunSimulation() {
     LOG_DEBUG("Starting simulation run");
     Sim.Reset();
     bool hadDataLoss = false;
+    int lossDay = -1; 
 
     const Si32 maxIterations = 30 * 24;
     Si32 iterations = 0;
+    auto& rng = GetThreadLocalRng();
 
     for (Si32 day = 0; day < 30; ++day) {
+
+
+        if (!TotalSimsByDay.count(day)) TotalSimsByDay[day] = 0;
         TotalSimsByDay[day]++;
 
         for (Si32 hour = 0; hour < 24; ++hour) {
             iterations++;
             if (iterations > maxIterations) {
                 LOG_ERROR("Simulation exceeded maximum iterations!");
-                return;
+
+                 goto end_simulation; 
             }
 
-            Sim.SimulateHour();
+            Sim.SimulateHour(rng);
 
-            if (!Sim.LostGroupInfo.empty() && !hadDataLoss) {
-                LOG_DEBUG("Data loss occurred on day " + std::to_string(day));
-                DataLossByDay[day]++;
-                hadDataLoss = true;
+            if (!Sim.LostGroupInfo.empty()) { 
+                if (!hadDataLoss) { 
+                    LOG_DEBUG("Data loss occurred on day " + std::to_string(day));
+                    lossDay = day;
+                    hadDataLoss = true;
+
+                }
+
                 break;
             }
         }
-
         if (hadDataLoss) {
-            for (Si32 remainingDay = day + 1; remainingDay < 30; ++remainingDay) {
-                TotalSimsByDay[remainingDay]++;
-                DataLossByDay[remainingDay]++;
-            }
             break;
+        }
+    }
+
+end_simulation: 
+
+    if (hadDataLoss) {
+        for (Si32 d = lossDay; d < 30; ++d) {
+            if (!DataLossByDay.count(d)) DataLossByDay[d] = 0;
+            DataLossByDay[d]++;
         }
     }
     GSims++;
@@ -160,14 +260,14 @@ void SimulationController::Draw() {
     Clear();
 
     std::map<Si64, Si64> probabilityByDay;
-    Si32 totalLosses = 0;
-
     for (Si32 day = 0; day < 30; ++day) {
-        if (TotalSimsByDay[day] > 0) {
-            totalLosses += DataLossByDay[day];
-            double probability = static_cast<double>(totalLosses) / 
+        if (TotalSimsByDay.count(day) && TotalSimsByDay[day] > 0) {
+            double probability = static_cast<double>(DataLossByDay[day]) /
                                static_cast<double>(TotalSimsByDay[day]);
-            probabilityByDay[day] = static_cast<Si64>(probability * 1000000);
+            probability = std::min(probability, 1.0);
+            probabilityByDay[day] = static_cast<Si64>(probability * 1000000.0);
+        } else {
+            probabilityByDay[day] = 0;
         }
     }
 

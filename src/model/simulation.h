@@ -1,24 +1,36 @@
 #pragma once
-#include "data_center.h"
+#include "pdisk.h"
+#include "vdisk.h"
+#include "group.h"
 #include "simulation_params.h"
 #include <map>
+#include <vector>
+#include <random>
+#include <memory>
+#include <unordered_map>
 
 namespace arctic {
 
 class Simulation {
 public:
     void Reset();
-    void SimulateHour();
+    void SimulateHour(std::mt19937& rng);
 
-    std::vector<DataCenter> Dcs;
+    std::unordered_map<TPDiskId, std::shared_ptr<TPDisk>> PDiskMap;
+    std::unordered_map<TVDiskId, std::shared_ptr<TVDisk>> VDiskMap;
+    std::unordered_map<TGroupId, std::shared_ptr<TGroup>> GroupMap;
+    std::vector<TPDiskId> PDiskIdsByDC[3];
     double CurrentTime = 0;
-    std::map<Si32, double> LostGroupInfo;
+    std::map<TGroupId, double> LostGroupInfo;
+
+    std::vector<TPDiskId> sparePDiskIdsByDC[3];
 
 private:
+    void InitializePDisks();
     void InitializeGroups();
-    void ProcessFailures(Si32 failures);
+    void ProcessFailures(Si32 failures, std::mt19937& rng);
     void ProcessGroups();
-    void CompleteRebuilds();
+    void CompleteReplications();
 };
 
 extern Ui32 GDisksPerDc;

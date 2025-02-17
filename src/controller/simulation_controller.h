@@ -3,13 +3,26 @@
 #include "model/simulation.h"
 #include "view/gui_elements.h"
 #include <map>
+#include <string>
+#include <sstream>
+#include <future>
+#include <thread>
+#include <vector>
+#include <numeric>
+#include <random>
 
 namespace arctic {
 
 extern const Ui32 kScreenWidth;
 extern const Ui32 kScreenHeight;
 
-class SimulationController {
+
+struct SimulationResult {
+    int lossDay = -1;         
+    int daysSimulated = 0;    
+};
+
+class SimulationController : public Engine {
 public:
     void Initialize();
     void Update();
@@ -20,6 +33,7 @@ private:
     void RunSimulation();
     void UpdateStatistics();
     void HandleGuiEvents();
+    SimulationResult RunSingleSimulation();
 
     Simulation Sim;
     GuiElements Gui;
@@ -28,4 +42,4 @@ private:
     bool DoRestart = false;
 };
 
-} // namespace arctic 
+} 

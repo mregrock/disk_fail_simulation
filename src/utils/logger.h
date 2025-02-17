@@ -18,6 +18,7 @@ public:
     static void Log(const std::string& message);
     static void LogError(const std::string& message);
     static void LogDebug(const std::string& message);
+    static void LogWarning(const std::string& message);
     static void SetOutputMode(OutputMode mode);
 
 private:
@@ -35,5 +36,5 @@ private:
 #define LOG(msg) Logger::Log(msg)
 #define LOG_ERROR(msg) Logger::LogError(msg)
 #define LOG_DEBUG(msg) Logger::LogDebug(msg)
-
+#define LOG_WARNING(msg) Logger::LogWarning(msg)
 } // namespace arctic 
