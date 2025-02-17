@@ -51,13 +51,31 @@ void InitializeGui(GuiElements& gui) {
     gui.ScrollSpareDisks->SetValue(10);
     gui.Gui->AddChild(gui.ScrollSpareDisks);
 
+    gui.TextVDisksPerPDisk = guiFactory.MakeText();
+    gui.TextVDisksPerPDisk->SetPos(kLeftMargin + kGraphWidth + 50, kTopMargin + kControlsYOffset + 300 + 29);
+    gui.TextVDisksPerPDisk->SetText("VDisks per PDisk: 9");
+    gui.Gui->AddChild(gui.TextVDisksPerPDisk);
+
+    gui.ScrollVDisksPerPDisk = guiFactory.MakeHorizontalScrollbar();
+    gui.ScrollVDisksPerPDisk->SetPos(kLeftMargin + kGraphWidth + 50, kTopMargin + kControlsYOffset + 300);
+    gui.ScrollVDisksPerPDisk->SetWidth(300);
+    gui.ScrollVDisksPerPDisk->SetMinValue(1);
+    gui.ScrollVDisksPerPDisk->SetMaxValue(20);
+    gui.ScrollVDisksPerPDisk->SetValue(9);
+    gui.Gui->AddChild(gui.ScrollVDisksPerPDisk);
+
     gui.ScrollWriteSpeed = guiFactory.MakeHorizontalScrollbar();
-    gui.ScrollWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500);
+    gui.ScrollWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 550);
     gui.ScrollWriteSpeed->SetWidth(300);
     gui.ScrollWriteSpeed->SetMinValue(50);
     gui.ScrollWriteSpeed->SetMaxValue(1000);
     gui.ScrollWriteSpeed->SetValue(100);
     gui.Gui->AddChild(gui.ScrollWriteSpeed);
+
+    gui.TextWriteSpeed = guiFactory.MakeText();
+    gui.TextWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 550 + 29);
+    gui.TextWriteSpeed->SetText("Write Speed: 100 MB/s");
+    gui.Gui->AddChild(gui.TextWriteSpeed);
 
     gui.ScrollDisksPerDc = guiFactory.MakeHorizontalScrollbar();
     gui.ScrollDisksPerDc->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 100);
@@ -82,11 +100,6 @@ void InitializeGui(GuiElements& gui) {
     gui.TextSpareDisks->SetText("Spare Disks per DC: 10");
     gui.Gui->AddChild(gui.TextSpareDisks);
 
-    gui.TextWriteSpeed = guiFactory.MakeText();
-    gui.TextWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500 + 29);
-    gui.TextWriteSpeed->SetText("Write Speed: 100 MB/s");
-    gui.Gui->AddChild(gui.TextWriteSpeed);
-
     gui.TextDisksPerDc = guiFactory.MakeText();
     gui.TextDisksPerDc->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 100 + 29);
     gui.TextDisksPerDc->SetText("Disks per DC: 100");
@@ -102,6 +115,19 @@ void InitializeGui(GuiElements& gui) {
     gui.TextDataLossTitle->SetText("Data Loss Probability Distribution");
     gui.Gui->AddChild(gui.TextDataLossTitle);
 
+    gui.TextRecoveryTime = guiFactory.MakeText();
+    gui.TextRecoveryTime->SetPos(kLeftMargin + kGraphWidth + 50, kTopMargin + kControlsYOffset + 200 + 29);
+    gui.TextRecoveryTime->SetText("PDisk Recovery Time: 24 hours");
+    gui.Gui->AddChild(gui.TextRecoveryTime);
+
+    gui.ScrollRecoveryTime = guiFactory.MakeHorizontalScrollbar();
+    gui.ScrollRecoveryTime->SetPos(kLeftMargin + kGraphWidth + 50, kTopMargin + kControlsYOffset + 200);
+    gui.ScrollRecoveryTime->SetWidth(300);
+    gui.ScrollRecoveryTime->SetMinValue(1);
+    gui.ScrollRecoveryTime->SetMaxValue(24 * 7);
+    gui.ScrollRecoveryTime->SetValue(24);
+    gui.Gui->AddChild(gui.ScrollRecoveryTime);
+
     LOG("GUI initialized");
     LOG("GUI elements created");
 }
@@ -110,14 +136,6 @@ void UpdateGuiText(GuiElements& gui) {
     std::stringstream ss;
     ss << "Simulations: " << GSims;
     gui.TextStats->SetText(ss.str());
-
-    // Комментируем или удаляем строки, отвечающие за TextDataLoss
-    // ss.str("");
-    // ss.clear();
-    // ss << std::fixed << std::setprecision(8) << "Data Loss Probability: " << GDataLossProb * 100.0 << "%";
-    // gui.TextDataLoss->SetText(ss.str());
-
-    // Оставляем остальной код обновления текста без изменений
 }
 
 void DrawCumulative(const std::map<Si64, Si64>& valuesByCount, Rgba color, 

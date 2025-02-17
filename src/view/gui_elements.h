@@ -20,12 +20,16 @@ struct GuiElements {
     std::shared_ptr<Text> TextSpareDisks;
     std::shared_ptr<Text> TextWriteSpeed;
     std::shared_ptr<Text> TextDataLossTitle;
+    std::shared_ptr<Text> TextRecoveryTime;
+    std::shared_ptr<Text> TextVDisksPerPDisk;
 
     std::shared_ptr<Scrollbar> ScrollDisksPerDc;
     std::shared_ptr<Scrollbar> ScrollDiskSize;
     std::shared_ptr<Scrollbar> ScrollFailureRate;
     std::shared_ptr<Scrollbar> ScrollSpareDisks;
     std::shared_ptr<Scrollbar> ScrollWriteSpeed;
+    std::shared_ptr<Scrollbar> ScrollRecoveryTime;
+    std::shared_ptr<Scrollbar> ScrollVDisksPerPDisk;
 };
 
 void InitializeGui(GuiElements& gui);

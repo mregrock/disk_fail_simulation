@@ -12,6 +12,8 @@ extern Ui32 GWriteSpeed;
 extern Ui64 GSims;
 extern double GDataLossProb;
 extern bool GDoRestart;
+extern Ui32 GPDiskRecoveryTimeHours;
+extern Ui32 GVDisksPerPDisk;
 
 extern std::shared_ptr<GuiTheme> GTheme;
 

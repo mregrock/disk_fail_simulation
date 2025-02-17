@@ -31,6 +31,7 @@ private:
     void ProcessFailures(Si32 failures, std::mt19937& rng);
     void ProcessGroups();
     void CompleteReplications();
+    void ProcessRecoveries();
 };
 
 extern Ui32 GDisksPerDc;

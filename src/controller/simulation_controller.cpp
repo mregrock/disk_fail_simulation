@@ -257,6 +257,23 @@ void SimulationController::HandleGuiEvents() {
         str << "Write Speed: " << GWriteSpeed << " MB/s";
         Gui.TextWriteSpeed->SetText(str.str());
     }
+
+    if (GPDiskRecoveryTimeHours != Gui.ScrollRecoveryTime->GetValue()) {
+        GPDiskRecoveryTimeHours = Gui.ScrollRecoveryTime->GetValue();
+        GDoRestart = true;
+        std::stringstream str;
+        str << "PDisk Recovery Time: " << GPDiskRecoveryTimeHours << " hours";
+        Gui.TextRecoveryTime->SetText(str.str());
+    }
+
+    // Обработка слайдера VDisks/PDisk
+    if (GVDisksPerPDisk != Gui.ScrollVDisksPerPDisk->GetValue()) {
+        GVDisksPerPDisk = Gui.ScrollVDisksPerPDisk->GetValue();
+        GDoRestart = true;
+        std::stringstream str;
+        str << "VDisks per PDisk: " << GVDisksPerPDisk;
+        Gui.TextVDisksPerPDisk->SetText(str.str());
+    }
 }
 
 void SimulationController::Draw() {

@@ -12,6 +12,9 @@
 
 namespace arctic {
 
+extern Ui32 GDisksPerDc;
+extern Ui32 GVDisksPerPDisk;
+
 void Simulation::Reset() {
     CurrentTime = 0;
 
@@ -37,7 +40,7 @@ void Simulation::InitializePDisks() {
         for (int pdiskIndex = 0; pdiskIndex < GDisksPerDc; ++pdiskIndex) {
             TPDiskId pdiskId = TPDiskId::FromValue(pdiskIdCounter);
             PDiskMap[pdiskId] = std::make_shared<TPDisk>(pdiskId, TDCId(dcId), TPDisk::Active);
-            for (int vdiskIndex = 0; vdiskIndex < 9; ++vdiskIndex) {
+            for (int vdiskIndex = 0; vdiskIndex < GVDisksPerPDisk; ++vdiskIndex) {
                 TVDiskId vdiskId = TVDiskId::FromValue(vdiskIdCounter);
                 const auto vdisk = std::make_shared<TVDisk>(vdiskId, pdiskId, TDCId(dcId));
                 VDiskMap[vdiskId] = vdisk;
@@ -52,7 +55,7 @@ void Simulation::InitializePDisks() {
         for (int spareIndex = 0; spareIndex < GSpareDisksPerDc; ++spareIndex) {
             TPDiskId pdiskId = TPDiskId::FromValue(pdiskIdCounter);
             PDiskMap[pdiskId] = std::make_shared<TPDisk>(pdiskId, TDCId(dcId), TPDisk::Spare);
-            for (int vdiskIndex = 0; vdiskIndex < 9; ++vdiskIndex) {
+            for (int vdiskIndex = 0; vdiskIndex < GVDisksPerPDisk; ++vdiskIndex) {
                 TVDiskId vdiskId = TVDiskId::FromValue(vdiskIdCounter);
                 const auto vdisk = std::make_shared<TVDisk>(vdiskId, pdiskId, TDCId(dcId));
                 VDiskMap[vdiskId] = vdisk;
@@ -147,6 +150,7 @@ void Simulation::SimulateHour(std::mt19937& rng) {
     ProcessFailures(failures, rng);
     ProcessGroups();
     CompleteReplications();
+    ProcessRecoveries();
 
     CurrentTime += 1.0;
 }
@@ -190,7 +194,7 @@ void Simulation::ProcessFailures(Si32 failures, std::mt19937& rng) {
         auto& pdisk = pdiskIt->second;
 
         if (pdisk->GetState() != TPDisk::Broken) {
-            pdisk->Fail();
+            pdisk->Fail(CurrentTime);
             successful_failures++;
             attempts_since_last_success = 0;
             LOG_DEBUG("PDisk failed: ID=" + randomPDiskId.ToString() + ", DC=" + std::to_string(pdisk->GetDCId()));
@@ -280,6 +284,21 @@ void Simulation::CompleteReplications() {
                            " (Group " + std::to_string(vdiskPtr->GetGroupId().GetRawId()) +
                            ") at time " + std::to_string(CurrentTime));
              }
+        }
+    }
+}
+
+void Simulation::ProcessRecoveries() {
+    extern Ui32 GPDiskRecoveryTimeHours;
+
+    for (auto& [pdiskId, pdiskPtr] : PDiskMap) {
+        if (pdiskPtr && pdiskPtr->GetState() == TPDisk::Broken) {
+            double brokenDuration = CurrentTime - pdiskPtr->GetBrokenTime();
+            if (brokenDuration >= static_cast<double>(GPDiskRecoveryTimeHours)) {
+                pdiskPtr->Recover();
+                LOG_DEBUG("PDisk Recovered: ID=" + pdiskId.ToString() +
+                          " after being broken for " + std::to_string(brokenDuration) + " hours.");
+            }
         }
     }
 }

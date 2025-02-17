@@ -10,6 +10,10 @@ Ui32 GFailureRate = 3;
 Ui32 GSpareDisksPerDc = 10;
 Ui32 GWriteSpeed = 100;
 Ui64 GSims = 0;
+
+Ui32 GPDiskRecoveryTimeHours = 24;
+Ui32 GVDisksPerPDisk = 9;
+
 double GDataLossProb = 0.0;
 bool GDoRestart = true;
 
