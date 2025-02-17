@@ -55,7 +55,7 @@ void SimulationController::Update() {
         GSims = 0;
     }
 
-    const unsigned int num_threads = 1; 
+    const unsigned int num_threads = std::max(1u, std::thread::hardware_concurrency() - 1);
     LOG_DEBUG("Launching " + std::to_string(num_threads) + " simulation threads.");
 
 

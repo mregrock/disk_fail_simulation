@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <deque>
+#include <mutex>
 
 namespace arctic {
 
@@ -31,6 +32,7 @@ private:
     static size_t maxLogLines;
     static std::string logFilename;
     static OutputMode outputMode;
+    static std::mutex logMutex;
 };
 
 #define LOG(msg) Logger::Log(msg)
