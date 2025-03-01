@@ -16,9 +16,9 @@ void SimulationController::Initialize() {
         GTheme = std::make_shared<GuiTheme>();
 
         LOG("GUI theme loaded successfully");
-        
+
         GFont.Load("data/arctic_one_bmf.fnt");
-        
+
         InitializeGui(Gui);
         Sim.Reset();
         DataLossByDay.clear();
@@ -35,7 +35,7 @@ void SimulationController::Initialize() {
 void SimulationController::Update() {
     LOG_DEBUG("Update start");
     HandleGuiEvents();
-    
+
     if (GDoRestart) {
         LOG_DEBUG("Restarting simulation");
         GDoRestart = false;
@@ -44,7 +44,7 @@ void SimulationController::Update() {
         TotalSimsByDay.clear();
         GSims = 0;
     }
-    
+
     static bool simulationInProgress = false;
     if (!simulationInProgress) {
         LOG_DEBUG("Starting new simulation frame");
@@ -71,30 +71,30 @@ void SimulationController::RunSimulation() {
     LOG_DEBUG("Starting simulation run");
     Sim.Reset();
     bool hadDataLoss = false;
-    
+
     const Si32 maxIterations = 30 * 24;
     Si32 iterations = 0;
-    
+
     for (Si32 day = 0; day < 30; ++day) {
         TotalSimsByDay[day]++;
-        
+
         for (Si32 hour = 0; hour < 24; ++hour) {
             iterations++;
             if (iterations > maxIterations) {
                 LOG_ERROR("Simulation exceeded maximum iterations!");
                 return;
             }
-            
+
             Sim.SimulateHour();
-            
-            if (Sim.LostData > 0 && !hadDataLoss) {
+
+            if (!Sim.LostGroupInfo.empty() && !hadDataLoss) {
                 LOG_DEBUG("Data loss occurred on day " + std::to_string(day));
                 DataLossByDay[day]++;
                 hadDataLoss = true;
                 break;
             }
         }
-        
+
         if (hadDataLoss) {
             for (Si32 remainingDay = day + 1; remainingDay < 30; ++remainingDay) {
                 TotalSimsByDay[remainingDay]++;
@@ -158,10 +158,10 @@ void SimulationController::HandleGuiEvents() {
 void SimulationController::Draw() {
     LOG_DEBUG("Draw start");
     Clear();
-    
+
     std::map<Si64, Si64> probabilityByDay;
     Si32 totalLosses = 0;
-    
+
     for (Si32 day = 0; day < 30; ++day) {
         if (TotalSimsByDay[day] > 0) {
             totalLosses += DataLossByDay[day];
@@ -170,7 +170,7 @@ void SimulationController::Draw() {
             probabilityByDay[day] = static_cast<Si64>(probability * 1000000);
         }
     }
-    
+
     DrawSimulation(probabilityByDay);
     UpdateGuiText(Gui);
     Gui.Gui->Draw(Vec2Si32(0, 0));

@@ -23,7 +23,7 @@ public:
 private:
     static void WriteToLog(const std::string& message);
     static void TrimLog();
-    
+
     static std::ofstream file;
     static bool initialized;
     static std::deque<std::string> logLines;

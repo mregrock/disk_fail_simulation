@@ -1,6 +1,7 @@
 #pragma once
 #include "data_center.h"
 #include "simulation_params.h"
+#include <map>
 
 namespace arctic {
 
@@ -8,10 +9,10 @@ class Simulation {
 public:
     void Reset();
     void SimulateHour();
-    
+
     std::vector<DataCenter> Dcs;
     double CurrentTime = 0;
-    Ui32 LostData = 0;
+    std::map<Si32, double> LostGroupInfo;
 
 private:
     void InitializeGroups();

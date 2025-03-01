@@ -19,6 +19,7 @@ struct GuiElements {
     std::shared_ptr<Text> TextStats;
     std::shared_ptr<Text> TextSpareDisks;
     std::shared_ptr<Text> TextWriteSpeed;
+    std::shared_ptr<Text> TextDataLossTitle;
 
     std::shared_ptr<Scrollbar> ScrollDisksPerDc;
     std::shared_ptr<Scrollbar> ScrollDiskSize;

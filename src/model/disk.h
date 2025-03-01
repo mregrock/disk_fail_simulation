@@ -4,10 +4,10 @@
 namespace arctic {
 
 struct Disk {
-    enum DiskState { Active, Inactive, Faulty };
-    DiskState State = Active;
-    double InactiveTime = 0;
-    double RebuildTime = 0;
+    enum DiskState { Active, Faulty, Spare, Rebuilding };
+    DiskState State = Spare;
+    double RebuildCompleteTime = 0;
+    bool RebuildTriggered = false;
     Ui32 DcId = 0;
     Si32 GroupId = -1;
 };

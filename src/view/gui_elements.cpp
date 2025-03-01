@@ -13,14 +13,14 @@ const Ui32 kScreenWidth = 1920;
 const Ui32 kScreenHeight = 1080;
 const Ui32 kLeftMargin = (kScreenWidth - kGraphWidth) / 2;
 const Ui32 kTopMargin = (kScreenHeight - kGraphHeight) / 2;
-const Ui32 kControlsYOffset = 0;
+const Ui32 kControlsYOffset = -70;
 
 void InitializeGui(GuiElements& gui) {
     LOG("Initializing GUI");
     gui.Theme = std::make_shared<GuiTheme>();
     gui.Theme->Load("data/gui_theme.xml");
     gui.Font.Load("data/arctic_one_bmf.fnt");
-    
+
     GuiFactory guiFactory;
     guiFactory.theme_ = gui.Theme;
     gui.Gui = guiFactory.MakeTransparentPanel();
@@ -94,13 +94,19 @@ void InitializeGui(GuiElements& gui) {
     gui.TextStats->SetPos(kLeftMargin, kTopMargin + kGraphHeight + 70);
     gui.TextStats->SetText("Simulations: 0\nData Loss Probability: 0.000000%");
     gui.Gui->AddChild(gui.TextStats);
+
+    gui.TextDataLossTitle = guiFactory.MakeText();
+    gui.TextDataLossTitle->SetPos(kLeftMargin, kTopMargin + 520);
+    gui.TextDataLossTitle->SetText("Data Loss Probability Distribution");
+    gui.Gui->AddChild(gui.TextDataLossTitle);
+
     LOG("GUI initialized");
     LOG("GUI elements created");
 }
 
 void UpdateGuiText(GuiElements& gui) {
     using namespace std;
-    
+
     stringstream str;
     str << "Simulations: " << GSims << "\n";
     str << "Data Loss Probability: " << fixed << setprecision(6) 
@@ -120,7 +126,7 @@ void DrawCumulative(const std::map<Si64, Si64>& valuesByCount, Rgba color,
         totalSum += pair.second;
         points.emplace_back(pair.first, totalSum);
     }
-    
+
     if (points.size() > 1) {
         if (totalSum > 0.0) {
             for (auto& point : points) {
@@ -129,10 +135,10 @@ void DrawCumulative(const std::map<Si64, Si64>& valuesByCount, Rgba color,
         }
 
         DrawRectangle(position, position + size, Rgba(32,32,32));
-        
+
         Vec2D scale = Vec2D(double(size.x) / 30.0, size.y);
         Vec2D point0 = points[0];
-        
+
         for (Si32 i = 1; i < points.size(); ++i) {
             Vec2D point1 = points[i];
             DrawLine(position + Vec2Si32(scale.x * point0.x, scale.y * point0.y),
@@ -148,9 +154,8 @@ void DrawCumulative(const std::map<Si64, Si64>& valuesByCount, Rgba color,
 void DrawLabelsAndMouseInteraction(const std::vector<Vec2D>& points, 
                                  Vec2Si32 position, Vec2Si32 size, 
                                  Vec2D scale, const char* title) {
-    GFont.Draw(title, position.x, position.y + size.y + 50, kTextOriginBottom);
-    GFont.Draw("Days", position.x + size.x/2, position.y - 20, kTextOriginTop);
-    GFont.Draw("Probability", position.x - 20, position.y + size.y/2, kTextOriginTop);
+    GFont.Draw("Days", position.x + size.x / 2, position.y - 20, kTextOriginTop);
+    GFont.Draw("Probability", position.x - 20, position.y + size.y / 2, kTextOriginTop);
     GFont.Draw("0", position.x, position.y, kTextOriginTop);
     GFont.Draw("30", position.x + size.x, position.y, kTextOriginTop);
 
@@ -171,7 +176,7 @@ void HandleMouseInteraction(const std::vector<Vec2D>& points,
     Si32 viewMouseX = mouseX - position.x;
     if (viewMouseX >= 0 && viewMouseX < size.x) {
         Si32 currentDay = viewMouseX * 30 / size.x;
-        
+
         Si32 nearestIdx = 0;
         for (Si32 i = 0; i < points.size(); ++i) {
             if (points[i].x > currentDay) {
@@ -179,7 +184,7 @@ void HandleMouseInteraction(const std::vector<Vec2D>& points,
                 break;
             }
         }
-        
+
         DrawLine(position + Vec2Si32(viewMouseX, 0),
                 position + Vec2Si32(viewMouseX, size.y),
                 Rgba(128, 128, 128));
