@@ -145,8 +145,21 @@ file(GLOB SRC_FILES_TO_REMOVE
 )
 list(REMOVE_ITEM SRC_FILES ${SRC_FILES_TO_REMOVE})
 
-# Создаем библиотеку из файлов движка
 add_library(arctic_engine STATIC ${SRC_FILES})
 
-# Добавляем подпроект src
 add_subdirectory(src)
+
+include(FetchContent)
+
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG    release-1.12.1
+)
+
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+include(GoogleTest)
+
+add_subdirectory(tests)

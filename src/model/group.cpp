@@ -4,6 +4,7 @@
 #include <vector>      
 #include <numeric>     
 #include <algorithm>   
+#include <functional>  
 
 namespace arctic {
 
@@ -18,9 +19,8 @@ void TGroup::AddVDisk(std::shared_ptr<TVDisk> vdisk, TDCId dcId) {
 }
 
 bool TGroup::CheckDataLoss() const {
-    std::vector<int> failedVDiskPerDc(3, 0); 
+    std::vector<int> failedVDiskPerDc(3, 0);
     for (const auto& vdiskId : AllVDiskIds) {
-
         auto vdiskIt = VDisks.find(vdiskId);
         if (vdiskIt == VDisks.end() || !vdiskIt->second) {
              LOG_ERROR("VDisk ID " + vdiskId.ToString() + " not found in group " + Id.ToString() + " during CheckDataLoss.");
@@ -28,10 +28,8 @@ bool TGroup::CheckDataLoss() const {
         }
         const auto& vdisk = vdiskIt->second;
 
-
         if (vdisk->GetState() == TVDisk::Faulty || vdisk->GetState() == TVDisk::Replicating) {
             TDCId dcId = vdisk->GetDCId();
-
             if (dcId < failedVDiskPerDc.size()) {
                  failedVDiskPerDc[dcId]++;
             } else {
@@ -40,21 +38,16 @@ bool TGroup::CheckDataLoss() const {
         }
     }
 
+    std::sort(failedVDiskPerDc.begin(), failedVDiskPerDc.end(), std::greater<int>());
 
-    int failedDCsCount = 0;
-    for (int count : failedVDiskPerDc) {
-        if (count >= 2) { 
-            return true;
-        }
-        if (count == 1) {
-            failedDCsCount++;
-        }
+    if (failedVDiskPerDc[2] > 0) {
+        return true;
     }
-    if (failedDCsCount >= 2) { 
+    if (failedVDiskPerDc[1] >= 2 && failedVDiskPerDc[0] >= 3) {
         return true;
     }
 
-    return false; 
+    return false;
 }
 
 std::vector<TVDiskId> TGroup::GetAllVDiskIds() const {

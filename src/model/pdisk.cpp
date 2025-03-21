@@ -53,7 +53,7 @@ void TPDisk::DecrementAvailableVDiskSlots() {
 
 void TPDisk::Fail(double currentTime) {
     if (State != Broken) {
-        LOG_DEBUG("PDisk Failing: ID=" + Id.ToString() + ", Current State=" + std::to_string(State) + " at Time=" + std::to_string(currentTime));
+        // LOG_DEBUG("PDisk Failing: ID=" + Id.ToString() + ", Current State=" + std::to_string(State) + " at Time=" + std::to_string(currentTime));
         State = Broken;
         BrokenTime = currentTime;
         AvailableVDiskSlots = 0;
@@ -61,11 +61,11 @@ void TPDisk::Fail(double currentTime) {
         for (auto& [vdiskId, vdiskPtr] : VDisks) {
             if (vdiskPtr && vdiskPtr->GetState() != TVDisk::Faulty) {
                 vdiskPtr->SetState(TVDisk::Faulty);
-                LOG_DEBUG("  VDisk marked Faulty: ID=" + vdiskId.ToString());
+                 // LOG_DEBUG("  VDisk marked Faulty: ID=" + vdiskId.ToString());
             }
         }
     } else {
-
+         // LOG_DEBUG("Attempted to Fail an already Broken PDisk: " + Id.ToString());
     }
 }
 
@@ -78,9 +78,9 @@ void TPDisk::Recover() {
         State = Spare;
         AvailableVDiskSlots = GVDisksPerPDisk;
         BrokenTime = 0.0;
-        LOG_DEBUG("PDisk Recovered as Spare: ID=" + Id.ToString());
+        // LOG_DEBUG("PDisk Recovered as Spare: ID=" + Id.ToString());
     } else {
-
+        // LOG_DEBUG("Attempted to Recover a non-Broken PDisk: " + Id.ToString());
     }
 }
 
