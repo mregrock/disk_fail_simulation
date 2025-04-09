@@ -67,7 +67,10 @@ void SimulationController::Update() {
 
         futures.push_back(std::async(std::launch::async, &SimulationController::RunSingleSimulation, this));
     }
-
+    // Идея для оптимизации:
+    // поток прерывает работу если получил дата лосс
+    // потоки пишут в очередь
+    // мы читаем по одному
 
     for (auto& fut : futures) {
         try {

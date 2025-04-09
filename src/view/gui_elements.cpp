@@ -65,7 +65,7 @@ void InitializeGui(GuiElements& gui) {
     gui.Gui->AddChild(gui.ScrollVDisksPerPDisk);
 
     gui.ScrollWriteSpeed = guiFactory.MakeHorizontalScrollbar();
-    gui.ScrollWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 550);
+    gui.ScrollWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500);
     gui.ScrollWriteSpeed->SetWidth(300);
     gui.ScrollWriteSpeed->SetMinValue(50);
     gui.ScrollWriteSpeed->SetMaxValue(1000);
@@ -73,7 +73,7 @@ void InitializeGui(GuiElements& gui) {
     gui.Gui->AddChild(gui.ScrollWriteSpeed);
 
     gui.TextWriteSpeed = guiFactory.MakeText();
-    gui.TextWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 550 + 29);
+    gui.TextWriteSpeed->SetPos(kLeftMargin - 320, kTopMargin + kControlsYOffset + 500 + 29);
     gui.TextWriteSpeed->SetText("Write Speed: 100 MB/s");
     gui.Gui->AddChild(gui.TextWriteSpeed);
 
