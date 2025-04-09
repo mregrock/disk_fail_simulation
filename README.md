@@ -8,8 +8,8 @@ git submodule update --init --recursive
 # Build and run
 
 ```bash
-mkdir build && cd build
-cmake ..
-make
-open ./simulation_fail_disks.app
+mkdir build
+chmod +x build.sh
+chmod +x run.sh
+./build.sh && ./run.sh
 ```
