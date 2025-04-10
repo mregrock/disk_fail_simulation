@@ -8,7 +8,6 @@ git submodule update --init --recursive
 # Build and run
 
 ```bash
-mkdir build
 chmod +x build.sh
 chmod +x run.sh
 ./build.sh && ./run.sh
